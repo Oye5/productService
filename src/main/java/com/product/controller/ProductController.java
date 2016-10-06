@@ -1,14 +1,16 @@
 package com.product.controller;
 
-import io.searchbox.client.JestClient;
-import io.searchbox.core.Index;
-
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
 import org.elasticsearch.common.geo.GeoPoint;
+import org.elasticsearch.common.unit.DistanceUnit;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.sort.SortOrder;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,11 +28,18 @@ import org.springframework.web.multipart.MultipartFile;
 import com.product.dto.request.ProductSaveRequest;
 import com.product.dto.request.ProductUpdateRequest;
 import com.product.dto.response.GenericResponse;
+import com.product.dto.response.GeoResponse;
 import com.product.dto.response.ProductGenericResponse;
+import com.product.dto.response.ProductImageResponse;
+import com.product.dto.response.ProductResponse;
+import com.product.dto.response.ProductStatusResponse;
+import com.product.dto.response.SellerResponse;
+import com.product.dto.response.ThumbResponse;
 import com.product.model.Geo;
 import com.product.model.Product;
 import com.product.model.ProductChat;
 import com.product.model.ProductImages;
+import com.product.model.ProductStatus;
 import com.product.model.Seller;
 import com.product.model.ThumbNail;
 import com.product.model.User;
@@ -46,6 +55,12 @@ import com.product.service.SellerService;
 import com.product.service.ThumbNailService;
 import com.product.util.ElasticUtil;
 import com.product.util.ImageUploadUtil;
+import com.product.util.SetProductResponse;
+
+import io.searchbox.client.JestClient;
+import io.searchbox.core.Index;
+import io.searchbox.core.Search;
+import io.searchbox.core.SearchResult;
 
 @RestController
 public class ProductController {
@@ -83,6 +98,322 @@ public class ProductController {
 	@Autowired
 	private ProductTransactionService productTransactionService;
 
+	@Autowired
+	private SetProductResponse setProductRespone;
+
+	/**
+	 * index data in elastic
+	 * 
+	 * @return
+	 */
+
+	@RequestMapping(value = "/indexData", method = RequestMethod.GET)
+	public ResponseEntity<Void> indexData() {
+
+		try {
+			// Fetching all data from the table
+			List<Product> productsList = productService.findAllProducts();
+			// Creating Elastic Client
+			JestClient client = ElasticUtil.getClient();
+			// Iterating over Retrived data from database
+			for (Product product : productsList) {
+				GeoPoint gp = new GeoPoint(product.getGeo().getLattitude(), product.getGeo().getLongitude());
+				product.setLocation(gp);
+				Index index = new Index.Builder(product).index("product").type("Product")
+						.id(product.getProductId().toString()).build();
+				client.execute(index);
+			}
+
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			return new ResponseEntity<Void>(HttpStatus.UNPROCESSABLE_ENTITY);
+		}
+
+		return new ResponseEntity<Void>(HttpStatus.OK);
+	}
+
+	/**
+	 * get product details by different parameters
+	 * 
+	 * @param lattitude
+	 * @param longitude
+	 * @param distance_type
+	 * @param num_results
+	 * @param country_code
+	 * @return
+	 */
+	@RequestMapping(value = "/v1/get", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<?> getProducts(@RequestParam(value = "q", required = false) String q,
+			@RequestParam(value = "categoryId", required = false) String categoryId,
+			@RequestParam("lattitude") Double lattitude, @RequestParam("longitude") Double longitude,
+			@RequestParam(value = "distance", required = false) Double distance,
+			@RequestParam("num_results") Integer num_results,
+			@RequestParam(value = "sortby", required = false) Integer sortby,
+			@RequestParam(value = "start", required = false) Integer start,
+			@RequestParam(value = "min_price", required = false) Double min_price,
+			@RequestParam(value = "max_price", required = false) Double max_price) {
+		GenericResponse response = new GenericResponse();
+		if (categoryId != null) {
+			if (Integer.parseInt(categoryId) < 0 || Integer.parseInt(categoryId) > 8) {
+				response.setCode("C001");
+				response.setMessage("category id must be in between 0 and 8");
+				return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
+			}
+		}
+		try {
+			List<Product> product;
+
+			if (distance == null)
+				distance = 15.0d;
+
+			QueryBuilder query = null; // QueryBuilders.boolQuery();
+
+			if (q != null && !q.equals("")) {
+				query = QueryBuilders.matchQuery("description", q);
+
+			}
+			if (categoryId != null && !categoryId.equals("")) {
+				if (query != null)
+					query = QueryBuilders.boolQuery().must(query)
+							.must(QueryBuilders.matchQuery("categoryId", categoryId));
+				else
+					query = QueryBuilders.boolQuery().must(QueryBuilders.matchQuery("categoryId", categoryId));
+			}
+
+			if (query != null)
+				query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.geoDistanceQuery("location")
+						.point(lattitude, longitude).distance(distance, DistanceUnit.KILOMETERS));
+			else
+				query = QueryBuilders.geoDistanceQuery("location").point(lattitude, longitude).distance(distance,
+						DistanceUnit.KILOMETERS);
+
+			if (max_price != null && min_price != null) {
+				if (query == null)
+					query = QueryBuilders.boolQuery()
+							.must(QueryBuilders.rangeQuery("price").lt(max_price).gt(min_price));
+				else
+					query = QueryBuilders.boolQuery().must(query)
+							.must(QueryBuilders.rangeQuery("price").lt(max_price).gt(min_price));
+			}
+
+			SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+			searchSourceBuilder.query(query);
+			// Pagination
+			if (start == null)
+				start = 0;
+			searchSourceBuilder.from(start);
+			if (num_results == null)
+				num_results = 20;
+			searchSourceBuilder.size(num_results);
+			if (sortby != null && sortby > 0 && sortby <= 4) {
+				if (sortby == 1)
+					searchSourceBuilder.sort("price", SortOrder.ASC);
+				else if (sortby == 2)
+					searchSourceBuilder.sort("price", SortOrder.DESC);
+				else if (sortby == 3)
+					searchSourceBuilder.sort("createdAt", SortOrder.ASC);
+				else if (sortby == 4)
+					searchSourceBuilder.sort("createdAt", SortOrder.DESC);
+			}
+
+			JestClient client = ElasticUtil.getClient();
+			Search search = new Search.Builder(searchSourceBuilder.toString()).addIndex("product").addType("Product")
+					.build();
+
+			SearchResult result = client.execute(search);
+			product = result.getSourceAsObjectList(Product.class);
+			// preparing response
+			List<ProductResponse> listProductResponse = setProductRespone.prepareResponse(product);
+			System.out.println("Elastic query " + searchSourceBuilder.toString());
+
+			return new ResponseEntity<List<ProductResponse>>(listProductResponse, HttpStatus.OK);
+
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			response.setCode("E001");
+			response.setMessage(ex.getMessage());
+
+			return new ResponseEntity<GenericResponse>(response, HttpStatus.BAD_REQUEST);
+		}
+
+	}
+
+	/**
+	 * get product status by productId
+	 * 
+	 * @param productId
+	 * @return
+	 */
+	@RequestMapping(value = "/v1/get/{productId}/stats", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<?> productFavourites(@PathVariable("productId") String productId) {
+		GenericResponse response = new GenericResponse();
+		ProductStatusResponse statusRespose = new ProductStatusResponse();
+		try {
+			ProductStatus productStatus = productStatusService.getProductStatus(productId);
+			if (productStatus != null) {
+				statusRespose.setFavs(productStatus.getFavourites());
+				statusRespose.setOffers(productStatus.getOffers());
+				statusRespose.setViews(productStatus.getViews());
+				return new ResponseEntity<ProductStatusResponse>(statusRespose, HttpStatus.OK);
+			} else {
+				response.setCode("E001");
+				response.setMessage("product status for given ProductId is not found");
+				return new ResponseEntity<GenericResponse>(response, HttpStatus.NOT_FOUND);
+			}
+		} catch (Exception e) {
+			response.setCode("E002");
+			response.setMessage(e.getMessage());
+			e.printStackTrace();
+			return new ResponseEntity<GenericResponse>(response, HttpStatus.BAD_REQUEST);
+		}
+
+	}
+
+	/**
+	 * get similar product
+	 * 
+	 * @param productId
+	 * @param numResults
+	 * @return
+	 */
+	@RequestMapping(value = "/v1/get/{productId}/similar", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<?> getSimilarProducts(@PathVariable("productId") String productId,
+			@RequestParam("num_results") Integer numResults) {
+		GenericResponse response = new GenericResponse();
+		try {
+			List<Product> list = productService.getProductByProductId(productId);
+			Product product = null;
+			if (list.size() > 0) {
+				product = list.get(0);
+			} else {
+				response.setCode("V001");
+				response.setMessage("product id not valid");
+				return new ResponseEntity<GenericResponse>(response, HttpStatus.NOT_FOUND);
+			}
+
+			List<Product> productList = productService.getProductsByCategoryId(product.getCategoryId());
+			// List<Product> responseResults = new ArrayList<Product>();
+			// for (int i = 0; i < numResults && i < productList.size(); i++) {
+			// responseResults.add(productList.get(i));
+			// ww
+			// }
+
+			List<ProductResponse> listProductResponse = new ArrayList<ProductResponse>();
+			ProductResponse productResponse = null;
+			for (int i = 0; i < numResults && i < productList.size(); i++) {
+				productResponse = new ProductResponse();
+				productResponse.setCategory_id(productList.get(i).getCategoryId());
+				productResponse.setCreated_at(productList.get(i).getCreatedAt());
+				productResponse.setCurrency(productList.get(i).getCurrency());
+				productResponse.setDescription(productList.get(i).getDescription());
+				productResponse.setCondition(productList.get(i).getCondition());
+				productResponse.setQuantity(productList.get(i).getQuantity());
+				// geo
+				GeoResponse geoResponse = new GeoResponse();
+				geoResponse.setCity(productList.get(i).getGeo().getCity());
+				geoResponse.setCountry_code(productList.get(i).getGeo().getCountryCode());
+				geoResponse.setDistance(10);
+				geoResponse.setLat(productList.get(i).getGeo().getLattitude());
+				geoResponse.setLng(productList.get(i).getGeo().getLongitude());
+				geoResponse.setZip_code(productList.get(i).getGeo().getZipCode());
+				productResponse.setGeo(geoResponse);
+				productResponse.setProduct_id(productList.get(i).getProductId());
+				List<ProductImages> img = productImageService
+						.getProductImagesByProductId(productList.get(i).getProductId());
+				// image
+				List<ProductImageResponse> listImageRes = new ArrayList<ProductImageResponse>();
+				ProductImageResponse imgRes = null;
+				for (int j = 0; j < img.size(); j++) {
+					imgRes = new ProductImageResponse();
+					imgRes.setId(img.get(j).getId());
+					imgRes.setUrl(img.get(j).getUrl());
+					listImageRes.add(imgRes);
+				}
+				productResponse.setImages(listImageRes);
+				ThumbNail thumbNail = thumbNailService.getThumbByProductId(productList.get(i).getProductId());
+				ThumbResponse thumb = null;
+				if (thumbNail != null) {
+					thumb = new ThumbResponse();
+					thumb.setHeight(thumbNail.getHeight());
+					thumb.setUrl(thumbNail.getUrl());
+					thumb.setWidth(thumbNail.getWidth());
+				}
+				productResponse.setThumb(thumb);
+
+				productResponse.setLanguage_code(productList.get(i).getLanguageCode());
+				productResponse.setDisplay_name(productList.get(i).getDisplayName());
+				// owner
+				SellerResponse sellerResponse = new SellerResponse();
+				Seller seller = sellerService.getSellerById(productList.get(i).getUser().getUserId());
+				if (seller != null) {
+					sellerResponse.setProfile_pic_url(seller.getProfilePic());
+					sellerResponse.setBanned(seller.getBanned());
+					sellerResponse.setCity(seller.getCity());
+					sellerResponse.setCountry_code(seller.getCountryCode());
+					sellerResponse.setId(seller.getId());
+					sellerResponse.setName(seller.getFirstName());
+					sellerResponse.setStatus(seller.getStatus());
+					sellerResponse.setZip_code(seller.getZipCode());
+					productResponse.setSeller(sellerResponse);
+				}
+
+				// productResponse.setOwner(sellerResponse);
+				productResponse.setPrice(productList.get(i).getPrice());
+				productResponse.setStatus(productList.get(i).getStatus());
+				productResponse.setUpdated_at(productList.get(i).getUpdatedAt());
+
+				listProductResponse.add(productResponse);
+
+			}
+
+			return new ResponseEntity<List<ProductResponse>>(listProductResponse, HttpStatus.OK);
+		} catch (Exception ex) {
+			response.setCode("E001");
+			response.setMessage(ex.getMessage());
+			ex.printStackTrace();
+			return new ResponseEntity<GenericResponse>(response, HttpStatus.BAD_REQUEST);
+		}
+
+	}
+
+	/**
+	 * get product details by product id from elastic
+	 * 
+	 * @param productId
+	 * @return
+	 */
+	@RequestMapping(value = "/v1/get/product/{productid}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<?> getProductByProductId(@PathVariable("productid") String productId) {
+		GenericResponse response = new GenericResponse();
+		try {
+			// search product by productId from elasticsearch
+			QueryBuilder query = QueryBuilders.boolQuery().must(QueryBuilders.matchQuery("productId", productId));
+			SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+			searchSourceBuilder.query(query);
+
+			JestClient client = ElasticUtil.getClient();
+			Search search = new Search.Builder(searchSourceBuilder.toString()).addIndex("product").addType("Product")
+					.build();
+
+			SearchResult result = client.execute(search);
+			Product product = result.getSourceAsObject(Product.class);
+			if (product != null) {
+				ProductResponse productResponse = setProductRespone.prepareResponse(product);
+				return new ResponseEntity<ProductResponse>(productResponse, HttpStatus.OK);
+			} else {
+				response.setCode("V001");
+				response.setMessage("No product found for given product Id");
+				return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			response.setCode("E001");
+			response.setMessage(e.getMessage());
+			return new ResponseEntity<GenericResponse>(response, HttpStatus.BAD_REQUEST);
+		}
+	}
+
 	/**
 	 * save product
 	 * 
@@ -90,17 +421,20 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/saveProducts", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<?> saveProducts(@RequestParam("image") MultipartFile[] file, ProductSaveRequest productSaveRequest) {
+	public ResponseEntity<?> saveProducts(@RequestParam("image") MultipartFile[] file,
+			ProductSaveRequest productSaveRequest) {
 		GenericResponse response = new GenericResponse();
 		ProductGenericResponse productGenericResponse = new ProductGenericResponse();
 		// check language code
-		if (productSaveRequest.getLanguageCode().isEmpty() || productSaveRequest.getLanguageCode().length() != 2 || productSaveRequest.getLanguageCode().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
+		if (productSaveRequest.getLanguageCode().isEmpty() || productSaveRequest.getLanguageCode().length() != 2
+				|| productSaveRequest.getLanguageCode().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
 			response.setCode("v001");
 			response.setMessage("please pass Language code  in upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
 		}
 		// check category id
-		if (productSaveRequest.getCountry().isEmpty() || productSaveRequest.getCountry().length() != 2 || productSaveRequest.getCountry().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
+		if (productSaveRequest.getCountry().isEmpty() || productSaveRequest.getCountry().length() != 2
+				|| productSaveRequest.getCountry().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
 			response.setCode("v002");
 			response.setMessage("please pass country code in upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
@@ -210,7 +544,8 @@ public class ProductController {
 
 			// Index to elastic
 			JestClient client = ElasticUtil.getClient();
-			Index index = new Index.Builder(product).index("product").type("Product").id(product.getProductId().toString()).build();
+			Index index = new Index.Builder(product).index("product").type("Product")
+					.id(product.getProductId().toString()).build();
 			client.execute(index);
 			productGenericResponse.setImagekeyList(keyList);
 			productGenericResponse.setCode("S001");
@@ -223,7 +558,8 @@ public class ProductController {
 		} catch (org.springframework.dao.DataIntegrityViolationException e) {
 			e.printStackTrace();
 			response.setCode("E001");
-			// response.setMessage("please provde unique ProductId. given productId is already registered");
+			// response.setMessage("please provde unique ProductId. given
+			// productId is already registered");
 			response.setMessage(e.getMessage());
 
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.CONFLICT);
@@ -249,17 +585,22 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/v1/{productId}/update", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> updateProducts(@PathVariable("productId") String productId, @RequestBody ProductUpdateRequest productUpdateRequest) {
+	public ResponseEntity<GenericResponse> updateProducts(@PathVariable("productId") String productId,
+			@RequestBody ProductUpdateRequest productUpdateRequest) {
 		GenericResponse response = new GenericResponse();
 
 		// check language code
-		if (productUpdateRequest.getLanguage_code().isEmpty() || productUpdateRequest.getLanguage_code().length() != 2 || productUpdateRequest.getLanguage_code().equals(productUpdateRequest.getLanguage_code().toLowerCase())) {
+		if (productUpdateRequest.getLanguage_code().isEmpty() || productUpdateRequest.getLanguage_code().length() != 2
+				|| productUpdateRequest.getLanguage_code()
+						.equals(productUpdateRequest.getLanguage_code().toLowerCase())) {
 			response.setCode("v001");
 			response.setMessage("please pass Language code  in upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
 		}
 		// check country code
-		if (productUpdateRequest.getGeo().getCountry_code().isEmpty() || productUpdateRequest.getGeo().getCountry_code().length() != 2 || productUpdateRequest.getGeo().getCountry_code().equals(productUpdateRequest.getGeo().getCountry_code().toLowerCase())) {
+		if (productUpdateRequest.getGeo().getCountry_code().isEmpty()
+				|| productUpdateRequest.getGeo().getCountry_code().length() != 2 || productUpdateRequest.getGeo()
+						.getCountry_code().equals(productUpdateRequest.getGeo().getCountry_code().toLowerCase())) {
 			response.setCode("v002");
 			response.setMessage("please pass country code in  upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
@@ -318,7 +659,8 @@ public class ProductController {
 			geo.setZipCode(productUpdateRequest.getGeo().getZip_code());
 			geoService.updateGeo(geo);
 
-			GeoPoint gp = new GeoPoint(productUpdateRequest.getGeo().getLat(), productUpdateRequest.getGeo().getLongitude());
+			GeoPoint gp = new GeoPoint(productUpdateRequest.getGeo().getLat(),
+					productUpdateRequest.getGeo().getLongitude());
 			product.setLocation(gp);
 
 			product.setGeo(geo);
@@ -348,7 +690,8 @@ public class ProductController {
 			productService.updateProduct(product);
 			// Index to elastic
 			JestClient client = ElasticUtil.getClient();
-			Index index = new Index.Builder(product).index("product").type("Product").id(product.getProductId().toString()).build();
+			Index index = new Index.Builder(product).index("product").type("Product")
+					.id(product.getProductId().toString()).build();
 			client.execute(index);
 
 			response.setCode("S001");
@@ -403,7 +746,8 @@ public class ProductController {
 
 			// Delete from Elastic Index
 			JestClient client = ElasticUtil.getClient();
-			Index index = new Index.Builder(product).index("product").type("Product").id(product.getProductId().toString()).build();
+			Index index = new Index.Builder(product).index("product").type("Product")
+					.id(product.getProductId().toString()).build();
 			client.execute(index);
 			response.setCode("S002");
 			response.setMessage("Product deleted successfully");
