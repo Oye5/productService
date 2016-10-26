@@ -119,8 +119,7 @@ public class ProductController {
 			for (Product product : productsList) {
 				GeoPoint gp = new GeoPoint(product.getGeo().getLattitude(), product.getGeo().getLongitude());
 				product.setLocation(gp);
-				Index index = new Index.Builder(product).index("product").type("Product")
-						.id(product.getProductId().toString()).build();
+				Index index = new Index.Builder(product).index("product").type("Product").id(product.getProductId().toString()).build();
 				client.execute(index);
 			}
 
@@ -143,15 +142,7 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/v1/get", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<?> getProducts(@RequestParam(value = "q", required = false) String q,
-			@RequestParam(value = "categoryId", required = false) String categoryId,
-			@RequestParam("lattitude") Double lattitude, @RequestParam("longitude") Double longitude,
-			@RequestParam(value = "distance", required = false) Double distance,
-			@RequestParam("num_results") Integer num_results,
-			@RequestParam(value = "sortby", required = false) Integer sortby,
-			@RequestParam(value = "start", required = false) Integer start,
-			@RequestParam(value = "min_price", required = false) Double min_price,
-			@RequestParam(value = "max_price", required = false) Double max_price) {
+	public ResponseEntity<?> getProducts(@RequestParam(value = "q", required = false) String q, @RequestParam(value = "categoryId", required = false) String categoryId, @RequestParam("lattitude") Double lattitude, @RequestParam("longitude") Double longitude, @RequestParam(value = "distance", required = false) Double distance, @RequestParam("num_results") Integer num_results, @RequestParam(value = "sortby", required = false) Integer sortby, @RequestParam(value = "start", required = false) Integer start, @RequestParam(value = "min_price", required = false) Double min_price, @RequestParam(value = "max_price", required = false) Double max_price) {
 		GenericResponse response = new GenericResponse();
 		if (categoryId != null) {
 			if (Integer.parseInt(categoryId) < 0 || Integer.parseInt(categoryId) > 8) {
@@ -174,26 +165,21 @@ public class ProductController {
 			}
 			if (categoryId != null && !categoryId.equals("")) {
 				if (query != null)
-					query = QueryBuilders.boolQuery().must(query)
-							.must(QueryBuilders.matchQuery("categoryId", categoryId));
+					query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.matchQuery("categoryId", categoryId));
 				else
 					query = QueryBuilders.boolQuery().must(QueryBuilders.matchQuery("categoryId", categoryId));
 			}
 
 			if (query != null)
-				query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.geoDistanceQuery("location")
-						.point(lattitude, longitude).distance(distance, DistanceUnit.KILOMETERS));
+				query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.geoDistanceQuery("location").point(lattitude, longitude).distance(distance, DistanceUnit.KILOMETERS));
 			else
-				query = QueryBuilders.geoDistanceQuery("location").point(lattitude, longitude).distance(distance,
-						DistanceUnit.KILOMETERS);
+				query = QueryBuilders.geoDistanceQuery("location").point(lattitude, longitude).distance(distance, DistanceUnit.KILOMETERS);
 
 			if (max_price != null && min_price != null) {
 				if (query == null)
-					query = QueryBuilders.boolQuery()
-							.must(QueryBuilders.rangeQuery("price").lt(max_price).gt(min_price));
+					query = QueryBuilders.boolQuery().must(QueryBuilders.rangeQuery("price").lt(max_price).gt(min_price));
 				else
-					query = QueryBuilders.boolQuery().must(query)
-							.must(QueryBuilders.rangeQuery("price").lt(max_price).gt(min_price));
+					query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.rangeQuery("price").lt(max_price).gt(min_price));
 			}
 
 			SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -217,8 +203,7 @@ public class ProductController {
 			}
 
 			JestClient client = ElasticUtil.getClient();
-			Search search = new Search.Builder(searchSourceBuilder.toString()).addIndex("product").addType("Product")
-					.build();
+			Search search = new Search.Builder(searchSourceBuilder.toString()).addIndex("product").addType("Product").build();
 
 			SearchResult result = client.execute(search);
 			product = result.getSourceAsObjectList(Product.class);
@@ -277,8 +262,7 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/v1/get/{productId}/similar", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<?> getSimilarProducts(@PathVariable("productId") String productId,
-			@RequestParam("num_results") Integer numResults) {
+	public ResponseEntity<?> getSimilarProducts(@PathVariable("productId") String productId, @RequestParam("num_results") Integer numResults) {
 		GenericResponse response = new GenericResponse();
 		try {
 			List<Product> list = productService.getProductByProductId(productId);
@@ -292,12 +276,6 @@ public class ProductController {
 			}
 
 			List<Product> productList = productService.getProductsByCategoryId(product.getCategoryId());
-			// List<Product> responseResults = new ArrayList<Product>();
-			// for (int i = 0; i < numResults && i < productList.size(); i++) {
-			// responseResults.add(productList.get(i));
-			// ww
-			// }
-
 			List<ProductResponse> listProductResponse = new ArrayList<ProductResponse>();
 			ProductResponse productResponse = null;
 			for (int i = 0; i < numResults && i < productList.size(); i++) {
@@ -318,8 +296,7 @@ public class ProductController {
 				geoResponse.setZip_code(productList.get(i).getGeo().getZipCode());
 				productResponse.setGeo(geoResponse);
 				productResponse.setProduct_id(productList.get(i).getProductId());
-				List<ProductImages> img = productImageService
-						.getProductImagesByProductId(productList.get(i).getProductId());
+				List<ProductImages> img = productImageService.getProductImagesByProductId(productList.get(i).getProductId());
 				// image
 				List<ProductImageResponse> listImageRes = new ArrayList<ProductImageResponse>();
 				ProductImageResponse imgRes = null;
@@ -392,8 +369,7 @@ public class ProductController {
 			searchSourceBuilder.query(query);
 
 			JestClient client = ElasticUtil.getClient();
-			Search search = new Search.Builder(searchSourceBuilder.toString()).addIndex("product").addType("Product")
-					.build();
+			Search search = new Search.Builder(searchSourceBuilder.toString()).addIndex("product").addType("Product").build();
 
 			SearchResult result = client.execute(search);
 			Product product = result.getSourceAsObject(Product.class);
@@ -421,20 +397,17 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/saveProducts", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<?> saveProducts(@RequestParam("image") MultipartFile[] file,
-			ProductSaveRequest productSaveRequest) {
+	public ResponseEntity<?> saveProducts(@RequestParam("image") MultipartFile[] file, ProductSaveRequest productSaveRequest) {
 		GenericResponse response = new GenericResponse();
 		ProductGenericResponse productGenericResponse = new ProductGenericResponse();
 		// check language code
-		if (productSaveRequest.getLanguageCode().isEmpty() || productSaveRequest.getLanguageCode().length() != 2
-				|| productSaveRequest.getLanguageCode().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
+		if (productSaveRequest.getLanguageCode().isEmpty() || productSaveRequest.getLanguageCode().length() != 2 || productSaveRequest.getLanguageCode().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
 			response.setCode("v001");
 			response.setMessage("please pass Language code  in upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
 		}
-		// check category id
-		if (productSaveRequest.getCountry().isEmpty() || productSaveRequest.getCountry().length() != 2
-				|| productSaveRequest.getCountry().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
+		// check country id
+		if (productSaveRequest.getCountry().isEmpty() || productSaveRequest.getCountry().length() != 2 || productSaveRequest.getCountry().equals(productSaveRequest.getLanguageCode().toLowerCase())) {
 			response.setCode("v002");
 			response.setMessage("please pass country code in upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
@@ -544,8 +517,7 @@ public class ProductController {
 
 			// Index to elastic
 			JestClient client = ElasticUtil.getClient();
-			Index index = new Index.Builder(product).index("product").type("Product")
-					.id(product.getProductId().toString()).build();
+			Index index = new Index.Builder(product).index("product").type("Product").id(product.getProductId().toString()).build();
 			client.execute(index);
 			productGenericResponse.setImagekeyList(keyList);
 			productGenericResponse.setCode("S001");
@@ -585,22 +557,17 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/v1/{productId}/update", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> updateProducts(@PathVariable("productId") String productId,
-			@RequestBody ProductUpdateRequest productUpdateRequest) {
+	public ResponseEntity<GenericResponse> updateProducts(@PathVariable("productId") String productId, @RequestBody ProductUpdateRequest productUpdateRequest) {
 		GenericResponse response = new GenericResponse();
 
 		// check language code
-		if (productUpdateRequest.getLanguage_code().isEmpty() || productUpdateRequest.getLanguage_code().length() != 2
-				|| productUpdateRequest.getLanguage_code()
-						.equals(productUpdateRequest.getLanguage_code().toLowerCase())) {
+		if (productUpdateRequest.getLanguage_code().isEmpty() || productUpdateRequest.getLanguage_code().length() != 2 || productUpdateRequest.getLanguage_code().equals(productUpdateRequest.getLanguage_code().toLowerCase())) {
 			response.setCode("v001");
 			response.setMessage("please pass Language code  in upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
 		}
 		// check country code
-		if (productUpdateRequest.getGeo().getCountry_code().isEmpty()
-				|| productUpdateRequest.getGeo().getCountry_code().length() != 2 || productUpdateRequest.getGeo()
-						.getCountry_code().equals(productUpdateRequest.getGeo().getCountry_code().toLowerCase())) {
+		if (productUpdateRequest.getGeo().getCountry_code().isEmpty() || productUpdateRequest.getGeo().getCountry_code().length() != 2 || productUpdateRequest.getGeo().getCountry_code().equals(productUpdateRequest.getGeo().getCountry_code().toLowerCase())) {
 			response.setCode("v002");
 			response.setMessage("please pass country code in  upper case like US");
 			return new ResponseEntity<GenericResponse>(response, HttpStatus.EXPECTATION_FAILED);
@@ -659,8 +626,7 @@ public class ProductController {
 			geo.setZipCode(productUpdateRequest.getGeo().getZip_code());
 			geoService.updateGeo(geo);
 
-			GeoPoint gp = new GeoPoint(productUpdateRequest.getGeo().getLat(),
-					productUpdateRequest.getGeo().getLongitude());
+			GeoPoint gp = new GeoPoint(productUpdateRequest.getGeo().getLat(), productUpdateRequest.getGeo().getLongitude());
 			product.setLocation(gp);
 
 			product.setGeo(geo);
@@ -690,8 +656,7 @@ public class ProductController {
 			productService.updateProduct(product);
 			// Index to elastic
 			JestClient client = ElasticUtil.getClient();
-			Index index = new Index.Builder(product).index("product").type("Product")
-					.id(product.getProductId().toString()).build();
+			Index index = new Index.Builder(product).index("product").type("Product").id(product.getProductId().toString()).build();
 			client.execute(index);
 
 			response.setCode("S001");
@@ -732,9 +697,7 @@ public class ProductController {
 			favouriteProductService.deleteFavouriteProduct(productId);
 
 			List<ProductChat> list = chatService.getChatIdByProductId(productId);
-			System.out.println("===list11t===" + list);
 			// delete from conversations
-			System.out.println("lisoso====" + list);
 			convService.deleteConversations(list);
 			// delete chat messages
 			chatService.deleteChatMessages(productId);
@@ -746,8 +709,7 @@ public class ProductController {
 
 			// Delete from Elastic Index
 			JestClient client = ElasticUtil.getClient();
-			Index index = new Index.Builder(product).index("product").type("Product")
-					.id(product.getProductId().toString()).build();
+			Index index = new Index.Builder(product).index("product").type("Product").id(product.getProductId().toString()).build();
 			client.execute(index);
 			response.setCode("S002");
 			response.setMessage("Product deleted successfully");
