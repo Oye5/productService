@@ -43,4 +43,9 @@ public class FavouriteProductServiceImpl implements FavouriteProductService {
 
 	}
 
+	@Override
+	public boolean isProductFavoriteForUser(String userID, String productId) {
+		return favouritesProductDao.isProductFavoriteForUser(userID, productId);
+	}
+
 }

@@ -15,4 +15,6 @@ public interface FavouriteProductDao {
 	void deleteFavouriteProduct(String productId);
 
 	int deleteFavouriteProductByUserId(String userId, String productId);
+
+	boolean isProductFavoriteForUser(String userID, String productId);
 }

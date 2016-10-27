@@ -15,6 +15,11 @@ import javax.persistence.Table;
 @Table(name = "product_favourites")
 public class FavouriteProducts implements Serializable {
 
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
 	@Id
 	@Column(name = "id")
 	@GeneratedValue(strategy = GenerationType.AUTO)

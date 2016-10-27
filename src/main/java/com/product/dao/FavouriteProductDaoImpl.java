@@ -47,4 +47,16 @@ public class FavouriteProductDaoImpl extends AbstractDao<Long, FavouriteProducts
 		return getSession().createQuery(hql).setString("userId", userId).setString("productId", productId).executeUpdate();
 	}
 
+	@Override
+	public boolean isProductFavoriteForUser(String userID, String productId) {
+		Criteria criteria = createEntityCriteria();
+		criteria.add(Restrictions.eq("productId.productId", productId));
+		criteria.add(Restrictions.eq("userId.userId", userID));
+		FavouriteProducts fav = (FavouriteProducts) criteria.uniqueResult();
+		if (fav == null) {
+			return false;
+		}
+		return true;
+	}
+
 }

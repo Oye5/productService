@@ -13,6 +13,7 @@ import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -32,9 +33,11 @@ import com.product.dto.response.GeoResponse;
 import com.product.dto.response.ProductGenericResponse;
 import com.product.dto.response.ProductImageResponse;
 import com.product.dto.response.ProductResponse;
+import com.product.dto.response.ProductResponseFav;
 import com.product.dto.response.ProductStatusResponse;
 import com.product.dto.response.SellerResponse;
 import com.product.dto.response.ThumbResponse;
+import com.product.model.FavouriteProducts;
 import com.product.model.Geo;
 import com.product.model.Product;
 import com.product.model.ProductChat;
@@ -360,7 +363,7 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/v1/get/product/{productid}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<?> getProductByProductId(@PathVariable("productid") String productId) {
+	public ResponseEntity<?> getProductByProductId(@PathVariable("productid") String productId, @RequestParam(name = "userid", required = false) String userID) {
 		GenericResponse response = new GenericResponse();
 		try {
 			// search product by productId from elasticsearch
@@ -375,7 +378,20 @@ public class ProductController {
 			Product product = result.getSourceAsObject(Product.class);
 			if (product != null) {
 				ProductResponse productResponse = setProductRespone.prepareResponse(product);
-				return new ResponseEntity<ProductResponse>(productResponse, HttpStatus.OK);
+				if (userID != null) {
+					System.out.println("==userid===" + userID);
+
+					ProductResponseFav productResponseFav = new ProductResponseFav();
+					BeanUtils.copyProperties(productResponse, productResponseFav);
+
+					boolean favoriteFlag = favouriteProductService.isProductFavoriteForUser(userID, productId);
+					productResponseFav.setFavorite(favoriteFlag);
+
+					return new ResponseEntity<ProductResponseFav>(productResponseFav, HttpStatus.OK);
+				} else {
+					return new ResponseEntity<ProductResponse>(productResponse, HttpStatus.OK);
+				}
+
 			} else {
 				response.setCode("V001");
 				response.setMessage("No product found for given product Id");

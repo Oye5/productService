@@ -2,10 +2,7 @@ package com.product.dto.response;
 
 import java.util.List;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-public class ProductResponse {
-
+public class ProductResponseFav {
 	private String product_id;
 	private String description;
 	private String display_name;
@@ -24,6 +21,8 @@ public class ProductResponse {
 	private int views_count;
 	private String created_at;
 	private String updated_at;
+
+	private boolean isFavorite;
 
 	public String getProduct_id() {
 		return product_id;
@@ -169,4 +168,11 @@ public class ProductResponse {
 		this.updated_at = updated_at;
 	}
 
+	public boolean isFavorite() {
+		return isFavorite;
+	}
+
+	public void setFavorite(boolean isFavorite) {
+		this.isFavorite = isFavorite;
+	}
 }
