@@ -16,6 +16,8 @@ public class ProductResponse {
 	private String currency;
 	private String status;
 	private String condition;
+	private String warranty;
+	private String brand;
 	private GeoResponse geo;
 	private SellerResponse seller;
 	private List<ProductImageResponse> images;
@@ -167,6 +169,22 @@ public class ProductResponse {
 
 	public void setUpdated_at(String updated_at) {
 		this.updated_at = updated_at;
+	}
+
+	public String getWarranty() {
+		return warranty;
+	}
+
+	public String getBrand() {
+		return brand;
+	}
+
+	public void setWarranty(String warranty) {
+		this.warranty = warranty;
+	}
+
+	public void setBrand(String brand) {
+		this.brand = brand;
 	}
 
 }

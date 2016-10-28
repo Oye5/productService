@@ -289,6 +289,8 @@ public class ProductController {
 				productResponse.setDescription(productList.get(i).getDescription());
 				productResponse.setCondition(productList.get(i).getCondition());
 				productResponse.setQuantity(productList.get(i).getQuantity());
+				productResponse.setBrand(product.getBrand());
+				productResponse.setWarranty(product.getWarranty());
 				// geo
 				GeoResponse geoResponse = new GeoResponse();
 				geoResponse.setCity(productList.get(i).getGeo().getCity());
@@ -331,7 +333,16 @@ public class ProductController {
 					sellerResponse.setCity(seller.getCity());
 					sellerResponse.setCountry_code(seller.getCountryCode());
 					sellerResponse.setId(seller.getId());
-					sellerResponse.setName(seller.getFirstName());
+					if (seller.getFirstName() != null && seller.getLastName() != null) {
+						sellerResponse.setName(seller.getFirstName() + " " + seller.getLastName());
+
+					} else if (seller.getLastName() != null) {
+						sellerResponse.setName(seller.getLastName());
+					} else if (seller.getFirstName() != null) {
+						sellerResponse.setName(seller.getFirstName());
+					} else {
+						sellerResponse.setName(product.getUser().getUserName());
+					}
 					sellerResponse.setStatus(seller.getStatus());
 					sellerResponse.setZip_code(seller.getZipCode());
 					productResponse.setSeller(sellerResponse);
@@ -363,7 +374,7 @@ public class ProductController {
 	 * @return
 	 */
 	@RequestMapping(value = "/v1/get/product/{productid}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<?> getProductByProductId(@PathVariable("productid") String productId, @RequestParam(name = "userid", required = false) String userID) {
+	public ResponseEntity<?> getProductByProductId(@PathVariable("productid") String productId, @RequestParam(name = "user_id", required = false) String userID) {
 		GenericResponse response = new GenericResponse();
 		try {
 			// search product by productId from elasticsearch
@@ -385,7 +396,7 @@ public class ProductController {
 					BeanUtils.copyProperties(productResponse, productResponseFav);
 
 					boolean favoriteFlag = favouriteProductService.isProductFavoriteForUser(userID, productId);
-					productResponseFav.setFavorite(favoriteFlag);
+					productResponseFav.setIs_favorited(favoriteFlag);
 
 					return new ResponseEntity<ProductResponseFav>(productResponseFav, HttpStatus.OK);
 				} else {

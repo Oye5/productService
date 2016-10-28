@@ -42,6 +42,8 @@ public class SetProductResponse {
 		productResponse.setCurrency(product.getCurrency());
 		productResponse.setCondition(product.getCondition());
 		productResponse.setDescription(product.getDescription());
+		productResponse.setBrand(product.getBrand());
+		productResponse.setWarranty(product.getWarranty());
 		// geo
 		GeoResponse geoResponse = new GeoResponse();
 		geoResponse.setCity(product.getGeo().getCity());
@@ -84,7 +86,16 @@ public class SetProductResponse {
 			sellerResponse.setCity(seller.getCity());
 			sellerResponse.setCountry_code(seller.getCountryCode());
 			sellerResponse.setId(seller.getUserId().getUserId());
-			sellerResponse.setName(seller.getFirstName());
+			if (seller.getFirstName() != null && seller.getLastName() != null) {
+				sellerResponse.setName(seller.getFirstName() + " " + seller.getLastName());
+
+			} else if (seller.getLastName() != null) {
+				sellerResponse.setName(seller.getLastName());
+			} else if (seller.getFirstName() != null) {
+				sellerResponse.setName(seller.getFirstName());
+			} else {
+				sellerResponse.setName(product.getUser().getUserName());
+			}
 			sellerResponse.setStatus(seller.getStatus());
 			sellerResponse.setZip_code(seller.getZipCode());
 			productResponse.setSeller(sellerResponse);
@@ -118,6 +129,8 @@ public class SetProductResponse {
 			productResponse.setCurrency(product.get(i).getCurrency());
 			productResponse.setCondition(product.get(i).getCondition());
 			productResponse.setDescription(product.get(i).getDescription());
+			productResponse.setBrand(product.get(i).getBrand());
+			productResponse.setWarranty(product.get(i).getWarranty());
 			// geo
 			GeoResponse geoResponse = new GeoResponse();
 			geoResponse.setCity(product.get(i).getGeo().getCity());
@@ -160,6 +173,18 @@ public class SetProductResponse {
 				sellerResponse.setCity(seller.getCity());
 				sellerResponse.setCountry_code(seller.getCountryCode());
 				sellerResponse.setId(seller.getUserId().getUserId());
+
+				if (seller.getFirstName() != null && seller.getLastName() != null) {
+					sellerResponse.setName(seller.getFirstName() + " " + seller.getLastName());
+
+				} else if (seller.getLastName() != null) {
+					sellerResponse.setName(seller.getLastName());
+				} else if (seller.getFirstName() != null) {
+					sellerResponse.setName(seller.getFirstName());
+				} else {
+					sellerResponse.setName(product.get(i).getUser().getUserName());
+				}
+
 				sellerResponse.setName(seller.getFirstName());
 				sellerResponse.setStatus(seller.getStatus());
 				sellerResponse.setZip_code(seller.getZipCode());

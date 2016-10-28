@@ -1,9 +1,12 @@
 package com.product.util;
 
+import java.awt.image.BufferedImage;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import javax.imageio.ImageIO;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,13 +36,13 @@ public class ImageUploadUtil {
 	String thumbKey = null;
 	@Value("${aws.s3.folder}")
 	public String folder;// = "product";
-	
+
 	public List<String> uploadImage(MultipartFile[] file, String productId) {
 		List<String> keyList = new ArrayList<String>();
 		for (int j = 0; j < file.length; j++) {
 			if (!file[j].isEmpty()) {
 				try {
-					System.out.println("==folder==="+folder);
+					System.out.println("==folder===" + folder);
 					String token = UUID.randomUUID().toString();
 					MessageDigest md = MessageDigest.getInstance("SHA-256");
 					md.update(token.getBytes());
@@ -53,18 +56,18 @@ public class ImageUploadUtil {
 					}
 
 					key = amazonS3Util.generateKey(sb.toString());
-					//upload thumb nail
-					if(j==0){
-	                    thumbKey=key+"_thumb.jpg";
-	                    amazonS3Util.uploadFileToS3(thumbKey, file[j].getInputStream(), file[j].getOriginalFilename(),folder);
-	                    keyList.add(thumbKey); 
+					// upload thumb nail
+					if (j == 0) {
+						thumbKey = key + "_thumb.jpg";
+						amazonS3Util.uploadFileToS3(thumbKey, file[j].getInputStream(), file[j].getOriginalFilename(), folder);
+						keyList.add(thumbKey);
 					}
 					String keyName = key + ".jpg";
 					System.out.println("===keyname===" + keyName);
 
 					// upload file to amazon
 					try {
-						amazonS3Util.uploadFileToS3(keyName, file[j].getInputStream(), file[j].getOriginalFilename(),folder);
+						amazonS3Util.uploadFileToS3(keyName, file[j].getInputStream(), file[j].getOriginalFilename(), folder);
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
@@ -82,13 +85,15 @@ public class ImageUploadUtil {
 				}
 			}
 		}
-		ThumbNail thumb = new ThumbNail();
-		thumb.setId(UUID.randomUUID().toString());
-		thumb.setHeight(140);
-		thumb.setWidth(90);
-		thumb.setProductId(product);
-		thumb.setUrl(thumbKey);
 		try {
+			ThumbNail thumb = new ThumbNail();
+			thumb.setId(UUID.randomUUID().toString());
+			BufferedImage image = ImageIO.read(file[0].getInputStream());
+			thumb.setHeight(image.getHeight());
+			thumb.setWidth(image.getWidth());
+			thumb.setProductId(product);
+			thumb.setUrl(thumbKey);
+
 			thumbNailService.saveThumbNail(thumb);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -96,6 +101,4 @@ public class ImageUploadUtil {
 		return keyList;
 	}
 
-	
-	
 }
